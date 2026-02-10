@@ -122,7 +122,7 @@ def compare_and_report(baseline_path, new_mmdb_path, logger)
     status_emoji = pct < 5 ? ":large_green_circle:" : ":red_circle:"
     limit_text = pct < 5 ? "(<5%)" : "(>5%)"
     
-    slack_message = "#{mentions}\nSo sánh GeoLite2 trên #{total} IP: chênh lệch #{pct}% #{limit_text} #{status_emoji}"
+    slack_message = "#{mentions}\nGeoLite2 Comparison on #{total} IPs: #{pct}% difference #{limit_text} #{status_emoji}"
     slack.send_message(slack_message)
   end
 end
