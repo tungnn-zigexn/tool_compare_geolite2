@@ -12,12 +12,14 @@ require_relative 'gcs_baseline_downloader'
 require_relative 'http_client_service'
 require_relative 'tar_extractor_service'
 require_relative 'max_mind_downloader_service'
+require_relative 'slack_notifier_service'
 
 # Configuration from ENV
 GCS_BUCKET = ENV.fetch('GCS_BUCKET', nil)
 GCS_OBJECT = ENV.fetch('GCS_OBJECT', 'geolite2/GeoLite2-Country.mmdb')
 MAXMIND_LICENSE_KEY = ENV.fetch('MAXMIND_LICENSE_KEY', nil)
 MAXMIND_ACCOUNT_ID = ENV['MAXMIND_ACCOUNT_ID']
+SLACK_WEBHOOK_URL = ENV['SLACK_WEBHOOK_URL']
 SAMPLE_SIZE = (ENV['SAMPLE_SIZE'] || '500_000').delete('_').to_i
 STEP = (ENV['STEP'] || '0').to_i
 PROGRESS = (ENV['PROGRESS'] || '0').to_i
@@ -37,7 +39,7 @@ class SimpleLogger
 end
 
 def compare_and_report(baseline_path, new_mmdb_path, logger)
-  logger.info('Opening the two MMDB files...')
+  logger.info('Opening MMDB files...')
   db_baseline = MaxMindDB.new(baseline_path)
   db_new = MaxMindDB.new(new_mmdb_path)
 
@@ -80,26 +82,49 @@ def compare_and_report(baseline_path, new_mmdb_path, logger)
   end
 
   # Report
-  puts
-  puts '========== MMDB COMPARISON REPORT =========='
-  puts "  Baseline file (GCS): gs://#{GCS_BUCKET}/#{GCS_OBJECT}"
-  puts '  New file (MaxMind):  MaxMind GeoLite2-Country'
-  puts "  IPs Checked:         #{total}"
-  puts "  Found (baseline):    #{found_a}"
-  puts "  Found (new):         #{found_b}"
-  puts "  Found in both:       #{both}"
-  puts "  Same country:        #{same_country}"
-  puts "  Different country:   #{diff_country}"
+  report_lines = []
+  report_lines << '========== MMDB COMPARISON REPORT =========='
+  report_lines << "  Baseline file (GCS):  gs://#{GCS_BUCKET}/#{GCS_OBJECT}"
+  report_lines << '  New file (MaxMind):   MaxMind GeoLite2-Country'
+  report_lines << "  IPs Checked:          #{total}"
+  report_lines << "  Found (baseline):     #{found_a}"
+  report_lines << "  Found (new):          #{found_b}"
+  report_lines << "  Found in both:        #{both}"
+  report_lines << "  Same country:         #{same_country}"
+  report_lines << "  Different country:    #{diff_country}"
 
   compared = same_country + diff_country
+  pct = 0.0
   if compared.positive?
     pct = (100.0 * diff_country / compared).round(2)
-    puts "  % Difference:        #{pct}%"
+    report_lines << "  % Difference:         #{pct}%"
+    
+    # Suggestions based on % difference
+    if pct < 5
+      report_lines << '  Suggestion: Difference < 5%, keeping current baseline is recommended.'
+    elsif pct > 5
+      report_lines << '  Suggestion: Difference > 5%, consider updating baseline on Storage.'
+    end
   else
-    puts '  % Difference:        N/A (no IPs found in both databases)'
+    report_lines << '  % Difference:         N/A (No IPs found in both databases)'
   end
-  puts '==========================================='
-  puts
+  report_lines << '==========================================='
+  
+  report_text = report_lines.join("\n")
+  puts "\n#{report_text}\n"
+
+  # Send to Slack if configured
+  if SLACK_WEBHOOK_URL
+    slack = SlackNotifierService.new(webhook_url: SLACK_WEBHOOK_URL, logger: logger)
+    
+    # Format mention and status
+    mentions = "<@U04TNE9NBND> <@U03PJRCJM37> <@U08US47H0N7>"
+    status_emoji = pct < 5 ? ":large_green_circle:" : ":red_circle:"
+    limit_text = pct < 5 ? "(<5%)" : "(>5%)"
+    
+    slack_message = "#{mentions}\nSo sánh GeoLite2 trên #{total} IP: chênh lệch #{pct}% #{limit_text} #{status_emoji}"
+    slack.send_message(slack_message)
+  end
 end
 
 def ipv4_sample_with_step(step, limit)
