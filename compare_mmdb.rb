@@ -5,7 +5,8 @@ require 'tmpdir'
 require 'time'
 
 # Load .env file
-Dotenv.load(File.expand_path('.env', __dir__))
+# Dotenv.load(File.expand_path('.env', __dir__))
+Dotenv.load(File.expand_path('.env', __dir__)) if File.exist?(File.expand_path('.env', __dir__))
 
 require_relative 'shared_utils'
 require_relative 'gcs_baseline_downloader'

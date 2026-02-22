@@ -1,0 +1,14 @@
+.git
+.gitignore
+docker-compose.yml
+Dockerfile
+.env
+.env.example
+*.log
+tmp/
+vendor/bundle/
+Gemfile.lock
+README.md
+task.md
+implementation_plan.md
+walkthrough.md
