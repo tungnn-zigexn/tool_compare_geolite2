@@ -5,7 +5,6 @@ services:
     build: .
     volumes:
       - .:/app
-      - /home/tungnn/.config/gcloud/legacy_credentials/tungnguyenngoc@zigexn.vn/adc.json:/app/gcp-credentials.json
     env_file:
       - .env
     environment:
